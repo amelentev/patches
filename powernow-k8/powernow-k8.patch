@@ -1,0 +1,81 @@
+diff -crB linux-2.6.31.3/arch/x86/kernel/cpu/cpufreq/powernow-k8.c linux-2.6.31-tuxonice-r1/arch/x86/kernel/cpu/cpufreq/powernow-k8.c
+*** linux-2.6.31.3/arch/x86/kernel/cpu/cpufreq/powernow-k8.c	2009-10-10 23:28:34.000000000 +0600
+--- linux-2.6.31-tuxonice-r1/arch/x86/kernel/cpu/cpufreq/powernow-k8.c	2009-10-11 02:19:51.000000000 +0600
+***************
+*** 44,52 ****
+  #include <acpi/processor.h>
+  
+  #define PFX "powernow-k8: "
+! #define VERSION "version 2.20.00"
+  #include "powernow-k8.h"
+  
+  /* serialize freq changes  */
+  static DEFINE_MUTEX(fidvid_mutex);
+  
+--- 44,58 ----
+  #include <acpi/processor.h>
+  
+  #define PFX "powernow-k8: "
+! #define VERSION "version 2.20.00-overridevid-1"
+  #include "powernow-k8.h"
+  
++ #define MAX_VID_OVERRIDES 4
++ static u8 vid_overrides[2*MAX_VID_OVERRIDES];
++ static int vid_overrides_count;
++ module_param_array(vid_overrides, byte, &vid_overrides_count, 0);
++ MODULE_PARM_DESC(vid_overrides, "An array of pairs of fid and corresponding vid to override the hardware vid defaults");
++ 
+  /* serialize freq changes  */
+  static DEFINE_MUTEX(fidvid_mutex);
+  
+***************
+*** 637,642 ****
+--- 643,654 ----
+  				data->batps);
+  }
+  
++ static void print_vid_override(int fid, int oldvid, int newvid)
++ {
++ 	printk(KERN_INFO PFX "   overridding fid 0x%x (%d MHz) from vid 0x%x to 0x%x\n",
++ 		fid, find_freq_from_fid(fid), oldvid, newvid);
++ }
++ 
+  static u32 freq_from_fid_did(u32 fid, u32 did)
+  {
+  	u32 mhz = 0;
+***************
+*** 688,693 ****
+--- 700,714 ----
+  	}
+  
+  	for (j = 0; j < data->numps; j++) {
++ 		{ // Overridding fid/vid combinations
++ 			int k;
++ 			for (k = 1; k < vid_overrides_count; k+=2)
++ 				if (vid_overrides[k-1] == pst[j].fid) {
++ 					print_vid_override(pst[j].fid, pst[j].vid, vid_overrides[k]);
++ 					pst[j].vid = vid_overrides[k];
++ 					break;
++ 				}
++ 		}
+  		int freq;
+  		powernow_table[j].index = pst[j].fid; /* lower 8 bits */
+  		powernow_table[j].index |= (pst[j].vid << 8); /* upper 8 bits */
+***************
+*** 962,967 ****
+--- 983,997 ----
+  
+  		dprintk("   %d : fid 0x%x, vid 0x%x\n", i, fid, vid);
+  
++ 		{ // Overridding fid/vid combinations
++ 			int k;
++ 			for (k = 1; k < vid_overrides_count; k+=2)
++ 				if (fid == vid_overrides[k-1]) {
++ 					print_vid_override(fid, vid, vid_overrides[k]);
++ 					vid = vid_overrides[k];
++ 					break;
++ 				}
++ 		}
+  		index = fid | (vid<<8);
+  		powernow_table[i].index = index;
+  

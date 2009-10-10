@@ -1,0 +1,16 @@
+Patch for powernow-k8 linux kernel module (CONFIG_X86_POWERNOW_K8=m) to change CPU voltage
+Works on all AMD CPU starts with K8 (Athlon 64)
+
+How to apply:
+cd /usr/src/linux-<version>
+cat /path/to/powernow-k8.patch | patch -p1
+
+Usage example:
+ # modprobe powernow-k8 vid_overrides=8,0x1a,0,0x22
+ # dmesg | grep powernow-k8
+powernow-k8: Found 1 AMD Turion(tm) 64 X2 Mobile Technology TL-50 processors (2 cpu cores) (version 2.20.00-overridevid-1)
+powernow-k8:    overridding fid 0x8 (1600 MHz) from vid 0x13 to 0x1a
+powernow-k8:    overridding fid 0x0 (800 MHz) from vid 0x1e to 0x22
+powernow-k8:    0 : fid 0x8 (1600 MHz), vid 0x1a
+powernow-k8:    1 : fid 0x0 (800 MHz), vid 0x22
+
