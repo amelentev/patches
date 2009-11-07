@@ -14,3 +14,6 @@ powernow-k8:    overridding fid 0x0 (800 MHz) from vid 0x1e to 0x22
 powernow-k8:    0 : fid 0x8 (1600 MHz), vid 0x1a
 powernow-k8:    1 : fid 0x0 (800 MHz), vid 0x22
 
+See also:
+http://www.linux-phc.org/
+
