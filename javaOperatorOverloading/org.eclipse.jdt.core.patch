@@ -1,21 +1,9 @@
 diff -crB org.eclipse.jdt.core.origin/compiler/org/eclipse/jdt/internal/compiler/ast/BinaryExpression.java org.eclipse.jdt.core/compiler/org/eclipse/jdt/internal/compiler/ast/BinaryExpression.java
 *** org.eclipse.jdt.core.origin/compiler/org/eclipse/jdt/internal/compiler/ast/BinaryExpression.java	2010-10-11 22:31:49.423000884 +0600
---- org.eclipse.jdt.core/compiler/org/eclipse/jdt/internal/compiler/ast/BinaryExpression.java	2010-09-21 17:44:00.115000031 +0600
-***************
-*** 10,15 ****
---- 10,18 ----
-   *******************************************************************************/
-  package org.eclipse.jdt.internal.compiler.ast;
-  
-+ import java.util.HashMap;
-+ import java.util.Map;
-+ 
-  import org.eclipse.jdt.internal.compiler.ASTVisitor;
-  import org.eclipse.jdt.internal.compiler.impl.*;
-  import org.eclipse.jdt.internal.compiler.classfmt.ClassFileConstants;
+--- org.eclipse.jdt.core/compiler/org/eclipse/jdt/internal/compiler/ast/BinaryExpression.java	2010-10-12 02:48:14.399000887 +0600
 ***************
 *** 116,121 ****
---- 119,132 ----
+--- 116,129 ----
   		codeStream.recordPositionsFrom(pc, this.sourceStart);
   		return;
   	}
@@ -32,11 +20,11 @@ diff -crB org.eclipse.jdt.core.origin/compiler/org/eclipse/jdt/internal/compiler
   			switch (this.bits & ASTNode.ReturnTypeIDMASK) {
 ***************
 *** 1788,1793 ****
---- 1799,1813 ----
+--- 1796,1810 ----
   	return this.right.printExpression(0, output);
   }
   
-+ static Map operatorMethods = new HashMap() {{
++ static java.util.Map operatorMethods = new java.util.HashMap() {{
 + 	put("+", "add");
 + 	put("-", "substract");
 + 	put("*", "multiply");
@@ -50,7 +38,7 @@ diff -crB org.eclipse.jdt.core.origin/compiler/org/eclipse/jdt/internal/compiler
   	// and nonRecursiveResolveTypeUpwards
 ***************
 *** 1824,1829 ****
---- 1844,1864 ----
+--- 1841,1861 ----
   		} else if (rightTypeID == TypeIds.T_JavaLangString) {
   			leftTypeID = TypeIds.T_JavaLangObject;
   		} else {
