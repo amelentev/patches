@@ -1,0 +1,63 @@
+diff -r 27f03394a69d src/share/classes/com/sun/tools/javac/comp/Lower.java
+--- a/src/share/classes/com/sun/tools/javac/comp/Lower.java	Wed Jun 23 16:44:15 2010 -0700
++++ b/src/share/classes/com/sun/tools/javac/comp/Lower.java	Tue Oct 12 01:54:25 2010 +0600
+@@ -2828,6 +2828,22 @@
+     }
+ 
+     public void visitBinary(JCBinary tree) {
++        if (tree.operator instanceof OperatorSymbol) {
++            OperatorSymbol os = (OperatorSymbol) tree.operator;
++            if (os.opcode == ByteCodes.error+1) {
++                MethodSymbol ms = (MethodSymbol) os.owner;
++                tree.lhs = translate(tree.lhs);
++                tree.rhs = translate(tree.rhs);
++                JCFieldAccess meth = make.Select(tree.lhs, ms.name);
++                meth.type = ms.type;
++                meth.sym = ms;
++                JCMethodInvocation r = make.Apply(null,
++                            meth,
++                            List.of(tree.rhs)).setType(tree.type);
++                result = translate(r);
++                return;
++            }
++        }
+         List<Type> formals = tree.operator.type.getParameterTypes();
+         JCTree lhs = tree.lhs = translate(tree.lhs, formals.head);
+         switch (tree.getTag()) {
+diff -r 27f03394a69d src/share/classes/com/sun/tools/javac/comp/Resolve.java
+--- a/src/share/classes/com/sun/tools/javac/comp/Resolve.java	Wed Jun 23 16:44:15 2010 -0700
++++ b/src/share/classes/com/sun/tools/javac/comp/Resolve.java	Tue Oct 12 01:54:25 2010 +0600
+@@ -769,9 +769,33 @@
+                     bestSoFar = concrete;
+             }
+         }
++        if (bestSoFar.kind >= ERR && operator && argtypes.size()==2) {
++            Name opname = getOperatorOverloadName(name);
++            if (opname != null) {
++                Symbol method = findMethod(env, argtypes.get(0), opname, List.of(argtypes.get(1)),
++                        null, false, false, false);
++                if (method.kind == Kinds.MTH)
++                    bestSoFar = new OperatorSymbol(method.name, method.type, ByteCodes.error+1, method);
++            }
++        }
+         return bestSoFar;
+     }
+ 
++    @SuppressWarnings("serial")
++    java.util.Map<String, String> operator2Method = new java.util.HashMap<String, String>() {{
++        put("+", "add");
++        put("-", "subtract");
++        put("*", "multiply");
++        put("/", "divide");
++        put("%", "remainder");
++    }};
++    Name getOperatorOverloadName(Name name) {
++        String res = operator2Method.get(name.toString());
++        return (res != null)
++                ? names.fromString(res)
++                : null;
++    }
++
+     /** Find unqualified method matching given name, type and value arguments.
+      *  @param env       The current environment.
+      *  @param name      The method's name.
