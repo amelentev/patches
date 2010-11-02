@@ -4,7 +4,7 @@ RCS file: /cvsroot/eclipse/org.eclipse.jdt.core/compiler/org/eclipse/jdt/interna
 retrieving revision 1.68
 diff -c -r1.68 BinaryExpression.java
 *** compiler/org/eclipse/jdt/internal/compiler/ast/BinaryExpression.java	26 Nov 2008 17:56:55 -0000	1.68
---- compiler/org/eclipse/jdt/internal/compiler/ast/BinaryExpression.java	2 Nov 2010 17:10:48 -0000
+--- compiler/org/eclipse/jdt/internal/compiler/ast/BinaryExpression.java	2 Nov 2010 21:57:57 -0000
 ***************
 *** 116,121 ****
 --- 116,128 ----
@@ -23,11 +23,11 @@ diff -c -r1.68 BinaryExpression.java
   			switch (this.bits & ASTNode.ReturnTypeIDMASK) {
 ***************
 *** 1788,1793 ****
---- 1795,1818 ----
+--- 1795,1861 ----
   	return this.right.printExpression(0, output);
   }
   
-+ final static java.util.Map operatorMethods = new java.util.HashMap() {{
++ final static java.util.Map binaryOperators = new java.util.HashMap() {{
 + 	put("+", "add");
 + 	put("-", "substract");
 + 	put("*", "multiply");
@@ -44,63 +44,72 @@ diff -c -r1.68 BinaryExpression.java
 + 	put(">=", "compareTo");
 + }};
 + MessageSend overloadMethod;
++ public static TypeBinding overloadBinaryOperator(BinaryExpression that, BlockScope scope) {
++ 	// try operator overloading
++ 	String op = that.operatorToString();
++ 	String method = (String) binaryOperators.get(op);
++ 	if (method != null) {
++ 		// find method
++ 		MessageSend ms = new MessageSend();
++ 		ms.receiver = that.left;
++ 		ms.selector = method.toCharArray();
++ 		ms.arguments = new Expression[]{that.right};
++ 		ms.actualReceiverType = that.left.resolvedType;
++ 		ms.binding = scope.getMethod(that.left.resolvedType, ms.selector, new TypeBinding[]{that.right.resolvedType}, ms);
++ 		if (ms.binding != null) { // found
++ 			ms.resolvedType = ms.binding.returnType;
++ 			ms.constant = Constant.NotAConstant;
++ 			ms.sourceStart = that.sourceStart;
++ 			ms.sourceEnd = that.sourceEnd;
++ 			that.constant = Constant.NotAConstant;
++ 			if ("compareTo".equals(method)) {
++ 				// rewrite to `left.compareTo(right) </> 0`
++ 				that.left = ms;
++ 				that.right = new IntLiteral("0".toCharArray(), that.sourceStart, that.sourceEnd, 0);
++ 				that.right.resolve(scope);
++ 				int leftTypeID = that.left.resolvedType.id;
++ 				int rightTypeID = that.right.resolvedType.id;
++ 				if (leftTypeID == rightTypeID) { // if compareTo really returns int
++ 					// resolve rest info about `left </> 0`
++ 					int operator = (that.bits & ASTNode.OperatorMASK) >> ASTNode.OperatorSHIFT;
++ 					int operatorSignature = OperatorExpression.OperatorSignatures[operator][(leftTypeID << 4) + rightTypeID];
++ 					that.left.computeConversion(scope, TypeBinding.wellKnownType(scope, (operatorSignature >>> 16) & 0x0000F), that.left.resolvedType);
++ 					that.right.computeConversion(scope, TypeBinding.wellKnownType(scope, (operatorSignature >>> 8) & 0x0000F), that.right.resolvedType);
++ 					that.bits |= operatorSignature & 0xF;
++ 					that.computeConstant(scope, leftTypeID, rightTypeID);
++ 					return that.resolvedType = TypeBinding.BOOLEAN;
++ 				}
++ 			} else {
++ 				that.overloadMethod = ms;
++ 				return that.resolvedType = ms.resolvedType = ms.binding.returnType;
++ 			}
++ 		}
++ 	}
++ 	return null;
++ }
 + 
   public TypeBinding resolveType(BlockScope scope) {
   	// keep implementation in sync with CombinedBinaryExpression#resolveType
   	// and nonRecursiveResolveTypeUpwards
 ***************
-*** 1825,1830 ****
---- 1850,1892 ----
+*** 1824,1829 ****
+--- 1892,1900 ----
+  		} else if (rightTypeID == TypeIds.T_JavaLangString) {
   			leftTypeID = TypeIds.T_JavaLangObject;
   		} else {
++ 			TypeBinding res = overloadBinaryOperator(this, scope);
++ 			if (res != null)
++ 				return res;
   			this.constant = Constant.NotAConstant;
-+ 			// try operator overloading
-+ 			String op = this.operatorToString();
-+ 			String method = (String) operatorMethods.get(op);
-+ 			if (method != null) {
-+ 				// find method
-+ 				MessageSend ms = new MessageSend();
-+ 				ms.receiver = this.left;
-+ 				ms.selector = method.toCharArray();
-+ 				ms.arguments = new Expression[]{this.right};
-+ 				ms.actualReceiverType = leftType;
-+ 				ms.constant = Constant.NotAConstant;
-+ 				ms.binding = scope.getMethod(leftType, ms.selector, new TypeBinding[]{rightType}, ms);
-+ 				if (ms.binding != null) { // found
-+ 					ms.resolvedType = ms.binding.returnType;
-+ 					if ("compareTo".equals(method)) {
-+ 						// rewrite to `left.compareTo(right) </> 0`
-+ 						this.left = ms;
-+ 						this.right = new IntLiteral("0".toCharArray(), 0, 1, 0);
-+ 						this.right.resolve(scope);
-+ 						leftTypeID = this.left.resolvedType.id;
-+ 						rightTypeID = this.right.resolvedType.id;
-+ 						if (leftTypeID == rightTypeID) { // if compareTo really returns int
-+ 							// resolve rest info about `left </> 0`
-+ 							int operator = (this.bits & ASTNode.OperatorMASK) >> ASTNode.OperatorSHIFT;
-+ 							int operatorSignature = OperatorExpression.OperatorSignatures[operator][(leftTypeID << 4) + rightTypeID];
-+ 							this.left.computeConversion(scope, TypeBinding.wellKnownType(scope, (operatorSignature >>> 16) & 0x0000F), leftType);
-+ 							this.right.computeConversion(scope, TypeBinding.wellKnownType(scope, (operatorSignature >>> 8) & 0x0000F), rightType);
-+ 							this.bits |= operatorSignature & 0xF;
-+ 							computeConstant(scope, leftTypeID, rightTypeID);
-+ 							return this.resolvedType = TypeBinding.BOOLEAN;
-+ 						}
-+ 					} else {
-+ 						this.overloadMethod = ms;
-+ 						return this.resolvedType = ms.resolvedType;
-+ 					}
-+ 				}
-+ 			}
   			scope.problemReporter().invalidOperator(this, leftType, rightType);
   			return null;
-  		}
 Index: compiler/org/eclipse/jdt/internal/compiler/ast/UnaryExpression.java
 ===================================================================
 RCS file: /cvsroot/eclipse/org.eclipse.jdt.core/compiler/org/eclipse/jdt/internal/compiler/ast/UnaryExpression.java,v
 retrieving revision 1.55
 diff -c -r1.55 UnaryExpression.java
 *** compiler/org/eclipse/jdt/internal/compiler/ast/UnaryExpression.java	6 Oct 2009 13:18:02 -0000	1.55
---- compiler/org/eclipse/jdt/internal/compiler/ast/UnaryExpression.java	2 Nov 2010 17:10:49 -0000
+--- compiler/org/eclipse/jdt/internal/compiler/ast/UnaryExpression.java	2 Nov 2010 21:57:58 -0000
 ***************
 *** 71,76 ****
 --- 71,83 ----
@@ -119,41 +128,48 @@ diff -c -r1.55 UnaryExpression.java
   				switch ((this.expression.implicitConversion & IMPLICIT_CONVERSION_MASK) >> 4) /* runtime type */ {
 ***************
 *** 205,210 ****
---- 212,223 ----
+--- 212,243 ----
   		return this.expression.printExpression(0, output);
   	}
   
-+ 	static java.util.Map operatorMethods = new java.util.HashMap() {{
++ 	static java.util.Map unaryOperators = new java.util.HashMap() {{
 + 		put("-", "negate");
 + 		put("~", "not");
 + 	}};
 + 	MessageSend overloadMethod;
++ 	public static TypeBinding overloadUnaryOperator(UnaryExpression that, BlockScope scope) {
++ 		// similar to #overloadBinaryOperator
++ 		String method = (String) unaryOperators.get(that.operatorToString());
++ 		if (method != null) {
++ 			// find method
++ 			MessageSend ms = new MessageSend();
++ 			ms.receiver = that.expression;
++ 			ms.selector = method.toCharArray();
++ 			ms.arguments = new Expression[0];
++ 			ms.actualReceiverType = that.expression.resolvedType;
++ 			ms.constant = Constant.NotAConstant;
++ 			ms.binding = scope.getMethod(that.expression.resolvedType, ms.selector, new TypeBinding[0], ms);
++ 			if (ms.binding != null) {
++ 				that.overloadMethod = ms;
++ 				that.constant = Constant.NotAConstant;
++ 				return that.resolvedType = ms.resolvedType = ms.binding.returnType;
++ 			}
++ 		}
++ 		return null;
++ 	}
 + 
   	public TypeBinding resolveType(BlockScope scope) {
   		boolean expressionIsCast;
   		if ((expressionIsCast = this.expression instanceof CastExpression) == true) this.expression.bits |= DisableUnnecessaryCastCheck; // will check later on
 ***************
-*** 223,228 ****
---- 236,257 ----
+*** 222,227 ****
+--- 255,263 ----
+  			}
   		}
   		if (expressionTypeID > 15) {
++ 			TypeBinding res = overloadUnaryOperator(this, scope);
++ 			if (res != null)
++ 				return res;
   			this.constant = Constant.NotAConstant;
-+ 			// try operator overloading. similar to BinaryExpression#resolveType
-+ 			String method = (String) operatorMethods.get(this.operatorToString());
-+ 			if (method != null) {
-+ 				// find method
-+ 				MessageSend ms = new MessageSend();
-+ 				ms.receiver = this.expression;
-+ 				ms.selector = method.toCharArray();
-+ 				ms.arguments = new Expression[0];
-+ 				ms.actualReceiverType = expressionType;
-+ 				ms.constant = Constant.NotAConstant;
-+ 				ms.binding = scope.getMethod(expressionType, ms.selector, new TypeBinding[0], ms);
-+ 				if (ms.binding != null) {
-+ 					this.overloadMethod = ms;
-+ 					return this.resolvedType = ms.resolvedType = ms.binding.returnType;
-+ 				}
-+ 			}
   			scope.problemReporter().invalidOperator(this, expressionType);
   			return null;
-  		}

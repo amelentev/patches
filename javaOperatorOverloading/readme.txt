@@ -11,3 +11,4 @@ org.eclipse.jdt.core.patch
  for Eclipse Compiler for Java (ecj) and Eclipse IDE. Tested on v3.6.1.
  sources: $ cvs -d ':pserver:anonymous@dev.eclipse.org/cvsroot/eclipse' co -r R3_6_maintenance  org.eclipse.jdt.core
 
+See also http://github.com/amelentev/lombok
